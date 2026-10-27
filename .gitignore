@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Local trace data (don't commit real traces)
+traces/*.json
+traces/*.jsonl
+!traces/.gitkeep
+
+# Env / secrets
+.env
+*.pem
+*.key

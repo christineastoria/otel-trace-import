@@ -1,0 +1,71 @@
+# OpenTelemetry Collector config for importing OTel traces into a
+# SELF-HOSTED LangSmith deployment.
+#
+# Two ways in:
+#   1. otlpjsonfile receiver  -> bulk-import existing OTLP-JSON files from disk
+#   2. otlp receiver          -> live apps / replay tools push OTLP (grpc/http)
+# Both feed one exporter that forwards to self-hosted LangSmith.
+#
+# Run (contrib image has the otlpjsonfile receiver):
+#   export LANGSMITH_API_KEY=lsv2_pt_...
+#   docker run --rm \
+#     -v "$PWD/otel-collector-langsmith.yaml:/etc/otelcol-contrib/config.yaml" \
+#     -v "$PWD/traces:/data/traces" \
+#     -e LANGSMITH_API_KEY \
+#     -p 4317:4317 -p 4318:4318 \
+#     otel/opentelemetry-collector-contrib:latest
+
+receivers:
+  # Bulk import: drop OTLP-JSON files here. Each file is OTLP ExportTraceServiceRequest
+  # JSON (one request per line). The receiver reads matching files and replays them.
+  otlpjsonfile:
+    include:
+      - "/data/traces/*.json"
+      - "/data/traces/*.jsonl"
+
+  # Live ingestion / replay target. Point apps or a replay script at localhost:4318.
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    # Keep requests a reasonable size for the LangSmith ingest endpoint.
+    send_batch_size: 500
+    send_batch_max_size: 1000
+    timeout: 5s
+
+exporters:
+  otlphttp/langsmith:
+    # Self-hosted: <your API host>/api/v1/otel + the /v1/traces signal path.
+    # SaaS US would be https://api.smith.langchain.com/otel/v1/traces instead.
+    traces_endpoint: https://YOUR-LANGSMITH-HOST/api/v1/otel/v1/traces
+    headers:
+      x-api-key: ${env:LANGSMITH_API_KEY}
+      # Self-hosted uses Langsmith-Project, NOT the agent headers (those 403 here).
+      Langsmith-Project: imported-otel
+    # Uncomment for an internal CA or self-signed cert:
+    # tls:
+    #   ca_file: /etc/otelcol-contrib/ca.pem
+    #   # insecure_skip_verify: true   # last resort for self-signed certs
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      queue_size: 10000
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlpjsonfile, otlp]
+      processors: [batch]
+      exporters: [otlphttp/langsmith]
+  telemetry:
+    logs:
+      level: info
