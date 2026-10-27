@@ -157,21 +157,22 @@ For a quick direct send of data that is already OTLP-JSON, `import_otlp_json_to_
 - **Import complete traces together.** A child span whose parent never arrives is dropped after the parent-linking window (`REDIS_RUNS_EXPIRY_SECONDS`, default 12h). Group spans by trace and send each trace's spans within that window.
 - **Keep batches moderate** (the Collector `batch` processor is set to 500 spans). The ingest endpoint has a 60s request timeout; gzip large payloads.
 
-## Limits (self-hosted, tunable via env vars)
+## Limits (self-hosted)
 
-| Limit | Default | Env var |
-|---|---|---|
-| Request timeout | 60 s | `middleware.Timeout` (code) |
-| Max field size — inputs / outputs / events / error / extra | 25 MB (→ HTTP 422 if exceeded) | `MAX_FIELD_SIZE_BYTES` |
-| Max tags size (truncated from end) | 10 KB | `MAX_TAGS_SIZE_BYTES` |
-| Max attachments per span | 2 | `OTEL_ATTACHMENT_MAX_PER_SPAN` |
-| Parallel run-submit concurrency (non-batch path) | 20 | `RunsSemaphore` (code) |
-| Redis ingest chunk size | 40 runs | `REDIS_TRANSACTION_RUNS_CHUNK_SIZE` |
-| Parent/child linking window | 12 h | `REDIS_RUNS_EXPIRY_SECONDS` |
-| S3 offload threshold | 0 KB (offload all, if blob storage on) | `MIN_BLOB_STORAGE_SIZE_KB` |
+| Limit | Default |
+|---|---|
+| Request timeout | 60 s |
+| Max field size — inputs / outputs / events / error / extra | 25 MB (→ HTTP 422 if exceeded) |
+| Max tags size (truncated from end) | 10 KB |
+| Max attachments per span | 2 |
+| Parallel run-submit concurrency (non-batch path) | 20 |
+| Redis ingest chunk size | 40 runs |
+| Parent/child linking window | 12 h |
+| S3 offload threshold | 0 KB (offload all, if blob storage on) |
 
 Notes:
 - **No per-request body size limit** on the OTLP endpoint, and **no app-level rate limit** on ingest — large or fast backfills are bounded by the 60s timeout and the concurrency semaphore, not a hard cap. Rate limiting, if any, lives at your nginx/load balancer.
 - A tenant over its usage limit gets HTTP **429**; oversized fields get HTTP **422** (`ErrPartTooLarge`).
+- **gzip is the main lever against the 60s timeout.** Since there's no body-size cap, the practical limit on a big batch is "does it finish in 60s." Compressing the body (`Content-Encoding: gzip`, ~5–10× on trace JSON) keeps large batches under that window. The Collector's `otlphttp` exporter gzips by default — the direct scripts don't, so prefer the Collector for large imports.
 
 Source: `smith-go/otel/otel.go`, `smith-go/runs/runs.go`, `smith-go/config/config.go`, `smith-go/ingestion/ingestion.go`.
