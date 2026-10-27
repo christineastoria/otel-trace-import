@@ -51,7 +51,7 @@ For an internal CA or self-signed cert, uncomment the `tls:` block in the config
 
 BigQuery stores spans **flat** — one row per span, columns like `trace_id`, `span_id`, `name`, `attributes`. That holds the same information as OTLP but is **not** OTLP format, so it needs converting first.
 
-> ⚠️ **Assumption:** We don't yet know the exact schema of your BigQuery table — its column names, types, or which span attributes it carries. The converter assumes a *conventional* OTel span layout (the structural columns below). **Confirm these against your real table** and remap any that differ with the `--col-*` flags — no code changes needed. Paste one real row and we can lock the mapping precisely.
+> ⚠️ **Assumption:** This example assumes a demo BigQuery table — its column names, types, and which span attributes it carries. The converter assumes a *conventional* OTel span layout (the structural columns below). **Confirm these match your real table** and remap any that differ with the `--col-*` flags. 
 
 ### Structural span fields the converter maps (from columns)
 
